@@ -1,0 +1,474 @@
+{
+  "schema": "discourse-article-cases/1",
+  "scope": "有限的原创短文与既有公开原句复用；验收集，不是独立准确率基准。",
+  "cases": [
+    {
+      "id": "reason-because",
+      "fixture": "reason-because.txt",
+      "query": "青禾项目为什么会延期启动？",
+      "expected_status": "answered",
+      "purpose": "明确的因为—所以关系；原因与结果分别保留原文区间",
+      "expected_fields": {
+        "reason": "施工道路积水",
+        "effect": "青禾项目延期启动"
+      },
+      "expected_evidence_sentences": [
+        "因为施工道路积水，所以青禾项目延期启动。"
+      ],
+      "expected_statement_kind": "fact"
+    },
+    {
+      "id": "reason-due",
+      "fixture": "reason-due.txt",
+      "query": "青禾展馆为什么会暂停开放？",
+      "expected_status": "answered",
+      "purpose": "由于引出的原因须与所问结果绑定",
+      "expected_fields": {
+        "reason": "入口处的水管破裂",
+        "effect": "青禾展馆暂停开放"
+      },
+      "expected_evidence_sentences": [
+        "由于入口处的水管破裂，青禾展馆暂停开放。"
+      ],
+      "expected_statement_kind": "fact"
+    },
+    {
+      "id": "reason-explanation",
+      "fixture": "reason-explanation.txt",
+      "query": "青禾展馆为何暂停开放？",
+      "expected_status": "answered",
+      "purpose": "结果在前、原因是结构在后",
+      "expected_fields": {
+        "reason": "入口处的水管破裂",
+        "effect": "青禾展馆暂停开放"
+      },
+      "expected_evidence_sentences": [
+        "青禾展馆暂停开放的原因是入口处的水管破裂。"
+      ],
+      "expected_statement_kind": "fact"
+    },
+    {
+      "id": "reason-leads",
+      "fixture": "reason-leads.txt",
+      "query": "青禾展馆为什么暂停开放？",
+      "expected_status": "answered",
+      "purpose": "导致两端的方向不能交换",
+      "expected_fields": {
+        "reason": "入口处的水管破裂",
+        "effect": "青禾展馆暂停开放"
+      },
+      "expected_evidence_sentences": [
+        "入口处的水管破裂导致青禾展馆暂停开放。"
+      ],
+      "expected_statement_kind": "fact"
+    },
+    {
+      "id": "reason-negative-cause",
+      "fixture": "reason-negative-cause.txt",
+      "query": "青禾展馆为什么会暂停开放？",
+      "expected_status": "answered",
+      "purpose": "原因内部的未必须原样保留，不能用全句否定过滤丢失有效因果",
+      "expected_fields": {
+        "reason": "备用电源未及时接通",
+        "effect": "青禾展馆暂停开放"
+      },
+      "expected_evidence_sentences": [
+        "因为备用电源未及时接通，所以青禾展馆暂停开放。"
+      ],
+      "expected_statement_kind": "fact"
+    },
+    {
+      "id": "reason-natural-what-cause",
+      "fixture": "reason-due.txt",
+      "query": "青禾展馆暂停开放是什么原因？",
+      "expected_status": "answered",
+      "purpose": "自然原因问法仍定位同一原因片段",
+      "expected_fields": {
+        "reason": "入口处的水管破裂",
+        "effect": "青禾展馆暂停开放"
+      },
+      "expected_evidence_sentences": [
+        "由于入口处的水管破裂，青禾展馆暂停开放。"
+      ],
+      "expected_statement_kind": "fact"
+    },
+    {
+      "id": "reason-direction-refusal",
+      "fixture": "reason-direction.txt",
+      "query": "青禾展馆为什么会暂停开放？",
+      "expected_status": "not_answered",
+      "purpose": "展馆暂停开放是后续取消的原因，不能把后续结果反推为暂停开放的原因",
+      "expected_evidence_sentences": [
+        "青禾展馆暂停开放导致预约活动取消。"
+      ]
+    },
+    {
+      "id": "reason-downstream",
+      "fixture": "reason-direction.txt",
+      "query": "预约活动为什么会取消？",
+      "expected_status": "answered",
+      "purpose": "同一因果句按结果提问时可以提取前项",
+      "expected_fields": {
+        "reason": "青禾展馆暂停开放",
+        "effect": "预约活动取消"
+      },
+      "expected_evidence_sentences": [
+        "青禾展馆暂停开放导致预约活动取消。"
+      ],
+      "expected_statement_kind": "fact"
+    },
+    {
+      "id": "reason-negated-link",
+      "fixture": "reason-negated-link.txt",
+      "query": "青禾展馆为什么暂停开放？",
+      "expected_status": "not_answered",
+      "purpose": "否定导致关系不得产出肯定原因",
+      "expected_evidence_sentences": [
+        "入口处的水管破裂并未导致青禾展馆暂停开放。"
+      ]
+    },
+    {
+      "id": "reason-not-because",
+      "fixture": "reason-not-because.txt",
+      "query": "青禾展馆为什么暂停开放？",
+      "expected_status": "not_answered",
+      "purpose": "不是因为排除了候选原因，并未提供真正原因",
+      "expected_evidence_sentences": [
+        "青禾展馆暂停开放不是因为入口处的水管破裂。"
+      ]
+    },
+    {
+      "id": "reason-purpose-refusal",
+      "fixture": "reason-purpose.txt",
+      "query": "青禾展馆为什么会暂停开放？",
+      "expected_status": "not_answered",
+      "purpose": "为了表达目的，不能自动充当已经发生事件的因果解释",
+      "expected_evidence_sentences": [
+        "为了检查安全隐患，青禾展馆暂停开放。"
+      ]
+    },
+    {
+      "id": "reason-future-refusal",
+      "fixture": "reason-future.txt",
+      "query": "青禾展馆为什么会暂停开放？",
+      "expected_status": "not_answered",
+      "purpose": "未来安排不得改写成已发生事件的原因短答",
+      "expected_evidence_sentences": [
+        "因为入口处的水管破裂，所以青禾展馆将于明天暂停开放。"
+      ]
+    },
+    {
+      "id": "reason-hypothesis-refusal",
+      "fixture": "reason-hypothesis.txt",
+      "query": "青禾展馆为什么暂停开放？",
+      "expected_status": "not_answered",
+      "purpose": "假设条件不能充当已发生原因",
+      "expected_evidence_sentences": [
+        "如果入口处的水管破裂，青禾展馆就会暂停开放。"
+      ]
+    },
+    {
+      "id": "reason-quotation-refusal",
+      "fixture": "reason-quotation.txt",
+      "query": "青禾展馆为什么暂停开放？",
+      "expected_status": "not_answered",
+      "purpose": "归属于发言者的引语不变成无归属的肯定事实"
+    },
+    {
+      "id": "reason-other-entity",
+      "fixture": "reason-other-entity.txt",
+      "query": "青禾展馆为什么会暂停开放？",
+      "expected_status": "not_answered",
+      "purpose": "蓝溪展馆的原因不回答青禾展馆",
+      "expected_evidence_sentences": [
+        "由于道路结冰，蓝溪展馆暂停开放。"
+      ]
+    },
+    {
+      "id": "sourced-launch-reason-absent",
+      "fixture": "change6-launch.txt",
+      "query": "嫦娥六号探测器为什么会发射升空？",
+      "expected_status": "not_answered",
+      "purpose": "公开原句记载时间和地点，没有发射原因",
+      "expected_evidence_sentences": [
+        "嫦娥六号探测器于5月3日在中国文昌航天发射场发射升空并进入地月转移轨道。"
+      ]
+    },
+    {
+      "id": "sourced-samples-method-absent",
+      "fixture": "change6-samples.txt",
+      "query": "嫦娥六号任务怎样采集月球样品？",
+      "expected_status": "not_answered",
+      "purpose": "公开原句记载重量，不能由重量补出采集方法",
+      "expected_evidence_sentences": [
+        "经测量，嫦娥六号任务采集月球样品1935.3克。"
+      ]
+    },
+    {
+      "id": "sourced-rainstorm-reason-absent",
+      "fixture": "rainstorm-definition.txt",
+      "query": "暴雨为什么常在积雨云中形成？",
+      "expected_status": "not_answered",
+      "purpose": "定义及形成位置没有解释形成原因",
+      "expected_evidence_sentences": [
+        "暴雨是指降水强度很大的雨，常在积雨云中形成。"
+      ]
+    },
+    {
+      "id": "method-through",
+      "fixture": "method-through.txt",
+      "query": "青禾小组怎样完成土壤调查？",
+      "expected_status": "answered",
+      "purpose": "通过明确连接已完成的目标和采用的方法",
+      "expected_fields": {
+        "method": "分区采样",
+        "subject": "青禾小组",
+        "effect": "完成土壤调查"
+      },
+      "expected_evidence_sentences": [
+        "青禾小组通过分区采样完成土壤调查。"
+      ],
+      "expected_statement_kind": "fact"
+    },
+    {
+      "id": "method-adopt",
+      "fixture": "method-adopt.txt",
+      "query": "青禾小组如何完成土壤调查？",
+      "expected_status": "answered",
+      "purpose": "采用明确连接方法和完成目标",
+      "expected_fields": {
+        "method": "分区采样",
+        "subject": "青禾小组",
+        "effect": "完成土壤调查"
+      },
+      "expected_evidence_sentences": [
+        "青禾小组采用分区采样完成土壤调查。"
+      ],
+      "expected_statement_kind": "fact"
+    },
+    {
+      "id": "method-explanation",
+      "fixture": "method-explanation.txt",
+      "query": "青禾小组完成土壤调查用什么方法？",
+      "expected_status": "answered",
+      "purpose": "的方法是句式的目标和方法分别绑定",
+      "expected_fields": {
+        "method": "分区采样",
+        "target": "青禾小组完成土壤调查",
+        "prescription": "青禾小组完成土壤调查的方法是分区采样。"
+      },
+      "expected_evidence_sentences": [
+        "青禾小组完成土壤调查的方法是分区采样。"
+      ],
+      "expected_statement_kind": "procedure"
+    },
+    {
+      "id": "method-natural-can",
+      "fixture": "method-through.txt",
+      "query": "青禾小组怎样才能完成土壤调查？",
+      "expected_status": "answered",
+      "purpose": "自然的怎样才能问法不把才能变成查找对象",
+      "expected_fields": {
+        "method": "分区采样",
+        "subject": "青禾小组",
+        "effect": "完成土壤调查"
+      },
+      "expected_evidence_sentences": [
+        "青禾小组通过分区采样完成土壤调查。"
+      ],
+      "expected_statement_kind": "fact"
+    },
+    {
+      "id": "method-negated-refusal",
+      "fixture": "method-negated.txt",
+      "query": "青禾小组怎样完成土壤调查？",
+      "expected_status": "not_answered",
+      "purpose": "未通过某方法完成，不等于已经用该方法完成",
+      "expected_evidence_sentences": [
+        "青禾小组并未通过分区采样完成土壤调查。"
+      ]
+    },
+    {
+      "id": "method-future-refusal",
+      "fixture": "method-future.txt",
+      "query": "青禾小组怎样完成土壤调查？",
+      "expected_status": "not_answered",
+      "purpose": "计划采用某方法，不能生成完成事实",
+      "expected_evidence_sentences": [
+        "青禾小组计划通过分区采样完成土壤调查。"
+      ]
+    },
+    {
+      "id": "method-instruction-refusal",
+      "fixture": "method-instruction.txt",
+      "query": "青禾小组是怎样完成土壤调查的？",
+      "expected_status": "not_answered",
+      "purpose": "应采用的作业提示不能改成已经采用并完成",
+      "expected_evidence_sentences": [
+        "为完成土壤调查，青禾小组应采用分区采样。"
+      ]
+    },
+    {
+      "id": "method-quotation-refusal",
+      "fixture": "method-quotation.txt",
+      "query": "青禾小组怎样完成土壤调查？",
+      "expected_status": "not_answered",
+      "purpose": "引语中的方法不变成无归属的肯定事实"
+    },
+    {
+      "id": "method-other-entity",
+      "fixture": "method-other-entity.txt",
+      "query": "青禾小组怎样完成土壤调查？",
+      "expected_status": "not_answered",
+      "purpose": "另一小组的采样方法不能回答青禾小组",
+      "expected_evidence_sentences": [
+        "蓝溪小组通过分区采样完成土壤调查。"
+      ]
+    },
+    {
+      "id": "reason-conflict",
+      "fixture": "reason-conflict.txt",
+      "query": "青禾展馆为什么暂停开放？",
+      "expected_status": "ambiguous",
+      "purpose": "同一结果有两个不同显式原因，不任取一项",
+      "expected_evidence_sentences": [
+        "入口处的水管破裂导致青禾展馆暂停开放。",
+        "供电设备故障导致青禾展馆暂停开放。"
+      ],
+      "expected_alternatives": {
+        "reason": [
+          "入口处的水管破裂",
+          "供电设备故障"
+        ]
+      },
+      "expected_min_answer_groups": 2
+    },
+    {
+      "id": "method-conflict",
+      "fixture": "method-conflict.txt",
+      "query": "青禾小组怎样完成土壤调查？",
+      "expected_status": "ambiguous",
+      "purpose": "两个显式方法构成候选歧义，不任取第一句",
+      "expected_evidence_sentences": [
+        "青禾小组通过分区采样完成土壤调查。",
+        "青禾小组通过定点采样完成土壤调查。"
+      ],
+      "expected_alternatives": {
+        "method": [
+          "分区采样",
+          "定点采样"
+        ]
+      },
+      "expected_min_answer_groups": 2
+    },
+    {
+      "id": "adjacent-reason-newlines",
+      "fixture": "adjacent-reason-newlines.txt",
+      "query": "青禾展馆为什么会暂停开放？",
+      "expected_status": "answered",
+      "purpose": "结果句紧邻显式原因解释句，同行与分行排版的答案相同",
+      "expected_fields": {
+        "reason": "入口处的水管破裂",
+        "effect": "青禾展馆暂停开放"
+      },
+      "expected_evidence_sentences": [
+        "青禾展馆暂停开放。",
+        "原因是入口处的水管破裂。"
+      ],
+      "expected_binding": true,
+      "expected_group": {
+        "sentence_ids": [
+          "S000001",
+          "S000002"
+        ],
+        "direct_sentence_ids": [
+          "S000002"
+        ],
+        "supporting_sentence_ids": [
+          "S000001"
+        ]
+      },
+      "expected_statement_kind": "fact"
+    },
+    {
+      "id": "adjacent-reason-sameline",
+      "fixture": "adjacent-reason-sameline.txt",
+      "query": "青禾展馆为什么会暂停开放？",
+      "expected_status": "answered",
+      "purpose": "结果句紧邻显式原因解释句，同行与分行排版的答案相同",
+      "expected_fields": {
+        "reason": "入口处的水管破裂",
+        "effect": "青禾展馆暂停开放"
+      },
+      "expected_evidence_sentences": [
+        "青禾展馆暂停开放。",
+        "原因是入口处的水管破裂。"
+      ],
+      "expected_binding": true,
+      "expected_group": {
+        "sentence_ids": [
+          "S000001",
+          "S000002"
+        ],
+        "direct_sentence_ids": [
+          "S000002"
+        ],
+        "supporting_sentence_ids": [
+          "S000001"
+        ]
+      },
+      "expected_statement_kind": "fact"
+    },
+    {
+      "id": "reason-no-content",
+      "fixture": "reason-due.txt",
+      "query": "为什么会这样？",
+      "expected_status": "no_content",
+      "purpose": "没有可定位对象或事件时不靠疑问词制造匹配"
+    },
+    {
+      "id": "method-no-content",
+      "fixture": "method-through.txt",
+      "query": "怎样才能这样？",
+      "expected_status": "no_content",
+      "purpose": "只有疑问表达和指代时不生成方法"
+    },
+    {
+      "id": "reason-wrong-condition",
+      "fixture": "reason-condition.txt",
+      "query": "青禾展馆为什么在夜间暂停开放？",
+      "expected_status": "not_answered",
+      "purpose": "原文只记载白天暂停开放，不能忽略问题中的夜间条件",
+      "expected_evidence_sentences": [
+        "由于入口处的水管破裂，青禾展馆在白天暂停开放。"
+      ]
+    },
+    {
+      "id": "method-no-explicit-relation",
+      "fixture": "method-no-relation.txt",
+      "query": "青禾小组怎样完成土壤调查？",
+      "expected_status": "not_answered",
+      "purpose": "完成调查和整理档案的并列记载不提供调查方法",
+      "expected_evidence_sentences": [
+        "青禾小组完成土壤调查，并整理了样品档案。"
+      ]
+    },
+    {
+      "id": "method-explicit-procedure",
+      "fixture": "method-procedure.txt",
+      "query": "怎样才能完成土壤调查？",
+      "expected_status": "answered",
+      "purpose": "明确的要—可以通过程序说明可以回答方法，保留可以的模态和整条作业说明，不宣称已经完成",
+      "expected_fields": {
+        "method": "分区采样",
+        "effect": "完成土壤调查",
+        "modality": "可以",
+        "prescription": "要完成土壤调查，可以通过分区采样。"
+      },
+      "expected_evidence_sentences": [
+        "要完成土壤调查，可以通过分区采样。"
+      ],
+      "expected_statement_kind": "procedure"
+    }
+  ]
+}

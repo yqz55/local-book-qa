@@ -1,0 +1,11 @@
+{
+  "version": "reviewed-expressions/1",
+  "groups": [
+    {
+      "id": "reviewed:gift-object",
+      "pos": "v",
+      "sense": "将物品赠予他人；仅作为检索候选，人物角色、否定和事实状态由后续抽取判断",
+      "forms": ["赠与", "赠送", "送给"]
+    }
+  ]
+}

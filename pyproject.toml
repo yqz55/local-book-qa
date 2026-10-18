@@ -1,0 +1,14 @@
+[project]
+name = "chinese-evidence-retrieval"
+version = "0.10.0"
+description = "Local deterministic Chinese TXT retrieval and rule QA with replayable evidence"
+requires-python = ">=3.11"
+dependencies = ["streamlit==1.51.0", "jieba==0.42.1"]
+
+[project.optional-dependencies]
+test = ["pytest>=8,<10"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "--basetemp=.data/pytest-tmp"

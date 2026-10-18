@@ -1,0 +1,18 @@
+{
+  "name": "Chinese Open Wordnet",
+  "repository": "https://github.com/omwn/omw-data",
+  "commit": "19256777c557e400dd5ef592428fa78def6c07dc",
+  "license": "WordNet license",
+  "files": {
+    "wn-data-cmn.tab": {
+      "url": "https://raw.githubusercontent.com/omwn/omw-data/19256777c557e400dd5ef592428fa78def6c07dc/wns/cow/wn-data-cmn.tab",
+      "sha256": "379fd2e41d3e1395f9f27cf23a39c6181849ffb4020c14a07ed2a4d4dd651122",
+      "bytes": 2547318
+    },
+    "LICENSE": {
+      "url": "https://raw.githubusercontent.com/omwn/omw-data/19256777c557e400dd5ef592428fa78def6c07dc/wns/cow/LICENSE",
+      "sha256": "81a3cb1f97e120581d67c71424f2de5dd96325d951f991e8a092147a2a4b2321",
+      "bytes": 1441
+    }
+  }
+}

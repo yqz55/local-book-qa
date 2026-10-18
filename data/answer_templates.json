@@ -1,0 +1,12 @@
+{
+  "definition": {"id": "T101", "required": ["definition"], "text": "原文表述：“{definition}”"},
+  "time": {"id": "T102", "required": ["time"], "text": "原文记载的时间是「{time}」。"},
+  "quantity": {"id": "T103", "required": ["value"], "text": "原文记载的数值是「{value}」。"},
+  "relation": {"id": "T104", "required": ["value"], "text": "按原文明确的赠送关系，被问字段是「{value}」。"},
+  "description": {"id": "T105", "required": ["description"], "text": "相关原文：“{description}”"},
+  "reason": {"id": "T106", "required": ["reason"], "text": "原文明确给出的原因是「{reason}」。"},
+  "method": {"id": "T107", "required": ["method"], "text": "原文给出的方法是「{method}」。"},
+  "general": {"id": "T108", "required": ["value"], "text": "原文对应的回答是「{value}」。"},
+  "opinion": {"id": "T109", "required": ["value"], "text": "按原文表达的评价，被问对象是「{value}」。"},
+  "excerpt": {"id": "T110", "required": ["description"], "text": "原文对此的表述是：\n{description}"}
+}

@@ -1,0 +1,7 @@
+{
+  "definition": {"id": "T101", "required": ["definition"], "text": "原文表述：“{definition}”"},
+  "time": {"id": "T102", "required": ["time"], "text": "原文记载的时间是「{time}」。"},
+  "quantity": {"id": "T103", "required": ["value"], "text": "原文记载的数值是「{value}」。"},
+  "relation": {"id": "T104", "required": ["value"], "text": "按原文明确的赠送关系，被问字段是「{value}」。"},
+  "description": {"id": "T105", "required": ["description"], "text": "相关原文：“{description}”"}
+}
