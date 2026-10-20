@@ -8,7 +8,7 @@ Every returned field is one genuine interval in one source sentence.
 import re
 
 
-DISCOURSE_POLICY = "explicit-cause-method/1"
+DISCOURSE_POLICY = "explicit-cause-method/2"
 DISCOURSE_CONFIG = {"max_sentences": 2, "max_method_chars": 240,
                     "anchor_order": "literal query token order; actual indexed token spans",
                     "procedure_answer": "source prescription; no assertion of completion"}
@@ -22,12 +22,12 @@ DISCOURSE_RULES = {
     "D203": "要Y，可以通过/采用/利用/使用M及含明确可以/应当等措辞的方法句保留原文处方和情态，标为procedure；为了仅表示目的，不能作为事实原因。",
     "D204": "最多相邻两句的命名方法如下加首先/然后/最后步骤，仅在完整、无边界且前件精确绑定时引用整个步骤原句，不拼造跨句字段。",
     "DG101": "事实原因及事实方法拒绝引语、传闻、推测、计划、未来、假设及否定因果；原因内部的否定原样保留，结果的否定或取消须本身属于问题所问事件。",
-    "DG102": "所有实质查询词、限定词、角色和已/曾/正在等状态须在正确的结果或方法角色中按真实词项顺序核验；不解析泛指代，不截取更长词项内部，不跨边界。",
+    "DG102": "所有实质查询词、限定词、角色和已/正在等状态须在正确的结果或方法角色中按真实词项顺序核验；普通过去时允许明确事实，否定属性必须与问题同极性；不解析泛指代，不截取更长词项内部，不跨边界。",
     "DG103": "不同因果层、可选择的原因及不能唯一划定的方法边界不强选第一个；并列明确原因保留为一个完整原文区间。",
 }
 DISCOURSE_PATTERNS = {
     "cause_prefix": r"^(?:因为|由于)(?P<reason>[^，,；;。！？!?]+)[，,](?:(?:所以|因此|因而)[，,]?)?(?P<effect>[^，,；;。！？!?]+)$",
-    "cause_predicate": r"^(?P<effect>[^，,；;。！？!?]+?)(?:的原因是|是因为|是由于)(?P<reason>[^，,；;。！？!?]+)$",
+    "cause_predicate": r"^(?P<effect>[^；;。！？!?]+?)(?:的原因是|是因为|是由于)(?P<reason>[^；;。！？!?]+)$",
     "cause_postfix": r"^(?P<effect>[^，,；;。！？!?]+)[，,](?:因为|由于)(?P<reason>[^，,；;。！？!?]+)$",
     "cause_direction": r"^(?P<reason>[^，,；;。！？!?]+?)(?:导致|造成|致使)(?P<effect>[^，,；;。！？!?]+)$",
     "cause_reference": r"^(?P<reference>原因是|这是因为)(?P<reason>[^，,；;。！？!?]+)$",
@@ -45,7 +45,7 @@ DISCOURSE_PATTERNS = {
     "effect_negative": r"没有|并未|尚未|未曾|未能|不会|不能|并非|不是|取消|停止|放弃|撤销|暂停|停运|未|没|不(?!超过|低于|小于|大于|足)",
     "alternative_cause": r"或者|或是|要么|还是|或(?!许)|不是.+就是",
     "reference": r"^(?:他|她|它|他们|她们|它们|其|这|那|该|此)$",
-    "anchor_residue": r"(?:\s|的|了|已经|现已|已|曾经|曾|正式|成功|正在|在|于|地|得|计划|打算|准备|即将|将要|将会|将|会|要|可能|或许|也许|可以|能够|应当|应该|需要|必须|可|须|需|没有|并未|尚未|未曾|未能|不会|不能|并非|不是|并不|不|未|没|取消|停止|放弃|撤销|暂停|停运)*",
+    "anchor_residue": r"(?:\s|的|了|之所以|已经|现已|已|曾经|曾|正式|成功|正在|在|于|地|得|计划|打算|准备|即将|将要|将会|将|会|要|可能|或许|也许|可以|能够|应当|应该|需要|必须|可|须|需|没有|并未|尚未|未曾|未能|不会|不能|并非|不是|并不|不|未|没|取消|停止|放弃|撤销|暂停|停运)*",
     "procedure_header": r"^(?P<target>[^，,；;。！？!?]+?)(?:的方法如下|的步骤如下|的操作步骤如下)[：:]?$",
     "procedure_steps": r"^首先[^；;。！？!?]+[，,](?:然后[^；;。！？!?]+[，,]){0,2}最后[^；;。！？!?]+$",
 }
@@ -138,7 +138,8 @@ def _unresolved(index, sentence, start, end):
 
 
 def _query_constraints(result, effect_text):
-    problems = []
+    from .answer_safety import blocking_query_constraints
+    problems = blocking_query_constraints(result)
     for constraint in result["question"].get("constraints", []):
         kind, value = constraint.get("kind"), constraint.get("value")
         if kind in {"time", "location"}:
@@ -146,8 +147,15 @@ def _query_constraints(result, effect_text):
             continue
         if kind == "status" and value == "modal":
             continue
-        if kind == "status" and value in {"completed", "past", "ongoing"}:
-            patterns = {"completed": r"已经|现已|已", "past": r"曾经|曾", "ongoing": r"正在"}
+        if kind == "status" and value == "past":
+            # A directly asserted past fact need not repeat the question's 曾.
+            continue
+        if kind == "negation":
+            if constraint["text"] not in effect_text:
+                problems.append("unverified_query_negation")
+            continue
+        if kind == "status" and value in {"completed", "ongoing"}:
+            patterns = {"completed": r"已经|现已|已", "ongoing": r"正在"}
             if not re.search(patterns[value], effect_text):
                 problems.append("unverified_query_" + value)
             continue
@@ -172,8 +180,10 @@ def _safety(index, result, sentences, effect_zones, reason_zone=None, procedure=
     query_terms = _terms(result)
     for match in re.finditer(DISCOURSE_PATTERNS["effect_negative"], effect_text):
         # Cancellation/suspension can themselves be the explicitly asked event.
-        # Negation filtered into a query constraint remains unsupported below.
-        if not any(match.group() in term for term in query_terms):
+        # An explicitly asked negative property needs the same source polarity.
+        asked_negative = any(c.get("kind") == "negation" and c.get("text") == match.group()
+                             for c in result["question"].get("constraints", []))
+        if not asked_negative and not any(match.group() in term for term in query_terms):
             issues.append("effect_negative_or_cancelled")
     if not procedure and re.search(DISCOURSE_PATTERNS["method_modal"], effect_text):
         issues.append("source_modal_not_fact")

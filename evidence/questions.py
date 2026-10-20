@@ -10,11 +10,11 @@ import re
 from .ingest import SourceMap
 
 
-QUESTION_POLICY = "question-plan/3"
+QUESTION_POLICY = "question-plan/4"
 QUESTION_RULES = {
     "QP001": "先按最长完整疑问表达识别题型；包括原因是什么、的方法是什么、怎样操作等原因/方法问法，疑问表达及礼貌前缀不参与计分或扩展。",
     "QP002": "保留已发现姓名、本书专用词、书名号及引号内的字面检索对象；不删除词项内部的子串。",
-    "QP003": "仅在识别为问句时排除独立语法词及句首文档语境表达；检索词始终为原始分词结果的子集，不重写词项或坐标。",
+    "QP003": "仅在识别为问句时排除独立语法词、句首文档语境及独立的尾部提问语境；检索词始终为原始分词结果的子集，不重写词项或坐标。",
     "QP004": "问句中的否定及计划、假设等事实状态记录为约束并排除普通词项计分；明确时间、地点约束仍可检索；未解决代词单独记录。",
     "QP005": "赠送关系仅接受列出的显式句式，记录施事、物品、受事及待回答角色；不推断代词或省略。",
     "QP006": "剔除提问表达后没有实质内容时返回 no_content；纯关键词输入不作全局停用词删除；多个待回答类型不强选一个字段。",
@@ -25,18 +25,19 @@ QUESTION_RULES = {
 _EXPRESSIONS = {
     "reason": ("出于什么原因", "出于何种原因", "原因是什么", "原因有哪些", "是什么原因", "什么原因", "是为什么", "是为何", "为什么会", "为何会", "为什么要", "为什么", "为何", "何故"),
     "description": ("是怎样的", "是什么样的", "如何描述", "怎样描述", "怎么描述", "如何介绍", "怎样介绍"),
-    "time": ("是在什么时候", "是什么时候", "是什么时间", "在什么时候", "什么时候", "什么时间", "是何时", "哪一年", "哪一月", "哪一天", "何时", "哪年", "哪月", "哪天", "几点", "几时"),
+    "time": ("日期和具体时间是什么", "日期和时间是什么", "具体日期是什么", "具体时间是什么", "日期是什么", "时间是什么", "时刻是什么", "是在什么时候", "是什么时候", "是什么时间", "在什么时候", "什么时候", "什么时间", "是何时", "哪几个月", "哪几月", "哪一年", "哪一月", "哪一天", "何时", "哪年", "哪月", "哪天", "几点", "几时"),
     "method": ("的方法是什么", "方法是什么", "通过什么方式", "通过什么方法", "采用什么方法", "以什么方式", "用什么方法", "怎样才可以", "如何才可以", "怎么才可以", "怎样才能", "如何才能", "怎么才能", "怎样操作", "如何操作", "怎么操作", "怎样进行", "如何进行", "怎么进行", "怎样做", "如何做", "怎么做", "是怎样", "是如何", "是怎么", "怎样", "如何", "怎么"),
-    "quantity": ("有多少", "是多少", "多少", "几个", "几名", "几位", "几次", "几天", "几年", "多大", "多长", "多高", "多重"),
+    "quantity": ("有多少", "是多少", "多少", "几个", "几名", "几位", "几次", "几天", "几年", "几处", "几列", "几种", "多大", "多长", "多高", "多重"),
     "definition": ("什么叫做", "什么是", "是什么", "指什么", "什么叫", "何谓"),
     "relation": ("谁",),
-    "unsupported": ("出现在哪里", "在哪里", "在何处", "哪里", "何处", "哪种", "哪个", "哪些", "什么"),
+    "unsupported": ("出现在哪里", "在哪里", "在何处", "哪里", "何处", "哪座", "哪本", "哪条", "哪类", "哪篇", "哪种", "哪个", "哪些", "什么"),
 }
 _PREFIXES = ("请问一下", "请告诉我", "能否告诉我", "能告诉我", "我想知道", "请解释一下", "请介绍一下", "请问", "告诉我", "想知道")
 _PARTICLES = frozenset(("的", "了", "吗", "呢", "呀", "吧", "啊", "是", "把", "将", "给", "于", "在", "请", "一下"))
 _QUANTITY_PARTICLES = frozenset(("有", "共有", "拥有", "一共有", "总共", "一共", "共"))
 _AUXILIARIES = ("才可以", "才能", "才会", "就能", "需要", "可以", "能够", "应该", "应当", "要", "会", "能")
 _DOCUMENT_CONTEXT = ("文章中", "文献中", "书中", "文中", "本文", "书里", "文章里")
+_DOCUMENT_FRAME = re.compile(r"(?:文章中|文献中|课文中|书中|文中|本文|课文|书里|文章里)(?:(?:解释|说明|指出|提到|建议|列举|列出|介绍|说)(?:的)?)?")
 _CONTEXT_ONLY = frozenset(("这", "那", "这个", "那个", "这些", "那些", "这样", "那样", "如此", "它", "他们", "她们", "它们",
                            "会", "能", "可以", "能够", "应该", "应当", "要", "需要", "才能", "才", "做", "发生"))
 _REFERENCES = frozenset(("他", "她", "它", "他们", "她们", "它们", "此人", "其"))
@@ -119,17 +120,30 @@ def analyze_question(cleaned: dict, raw: str, tokens: list[dict]) -> dict:
 
     negations = match_spans({"negative": _NEGATIONS}, "negation") if question_context else []
     states = match_spans(_STATES, "status") if question_context else []
+    from .answer_safety import status_grammar
+    states = [s for s in states if status_grammar(text, s["clean_start"], s["clean_end"], s["value"])]
     document_context = []
     if question_context:
         states += match_spans({"modal": _AUXILIARIES}, "status")
-        for context in match_spans({"context": _DOCUMENT_CONTEXT}, "document_context"):
-            # Context removal is only a prefix rule.  A reference to 本文 in
-            # the middle of a queried object must not be silently excised.
+        for m in _DOCUMENT_FRAME.finditer(text):
+            if is_protected(*m.span()) or not complete(*m.span()):
+                continue
+            context = item(*m.span(), category="document_context", value="context")
+            # A document frame must introduce the question or its independent
+            # final interrogative clause, never sit inside a queried object.
             preceding = list(text[:context["clean_start"]])
             for prefix in polite:
                 if prefix["clean_end"] <= context["clean_start"]:
                     preceding[prefix["clean_start"]:prefix["clean_end"]] = [" "] * (prefix["clean_end"] - prefix["clean_start"])
-            if not "".join(preceding).strip(" \t\n，,：:"):
+            leading = not "".join(preceding).strip(" \t\n，,：:")
+            suffix = list(text[context["clean_end"]:])
+            for question in type_matches:
+                if question["clean_start"] >= context["clean_end"]:
+                    a, b = question["clean_start"] - context["clean_end"], question["clean_end"] - context["clean_end"]
+                    suffix[a:b] = [" "] * (b - a)
+            trailing = (text[:context["clean_start"]].rstrip().endswith(("，", ",", "：", ":"))
+                        and not "".join(suffix).strip(" \t\n，,：:。！？?!的呢吗"))
+            if leading or trailing:
                 document_context.append(context)
     # A status word contained in an already identified question/polite expression
     # (e.g. 能否告诉我) is grammatical, not an event-status constraint.
@@ -148,7 +162,8 @@ def analyze_question(cleaned: dict, raw: str, tokens: list[dict]) -> dict:
             constraints.append(constraint)
     for m in _LOCATION.finditer(text):
         constraint = item(*m.span("place"), category="location", kind="location", value=m.group("place"))
-        if not is_protected(*m.span("place")) and outside_grammar(constraint):
+        if (not re.search(r"哪|什么|何处|哪里", m.group("place"))
+                and not is_protected(*m.span("place")) and outside_grammar(constraint)):
             constraints.append(constraint)
     if question_context:
         for token in tokens:

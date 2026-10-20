@@ -8,8 +8,8 @@ import hashlib
 import math
 import unicodedata
 
-from . import ENGINE_VERSION, DISCOURSE_ENGINE_VERSION, WINDOW_ENGINE_VERSION, ANSWER_ENGINE_VERSION, EXPANSION_ENGINE_VERSION, DAG_ENGINE_VERSION, LEGACY_ENGINE_VERSION, SUPPORTED_ENGINE_VERSIONS, schema_version
-from . import legacy_retrieval, legacy_dag_retrieval, legacy_expansion_retrieval, legacy_answer_retrieval, legacy_window_retrieval, legacy_discourse_retrieval
+from . import ENGINE_VERSION, GENERAL_ENGINE_VERSION, DISCOURSE_ENGINE_VERSION, WINDOW_ENGINE_VERSION, ANSWER_ENGINE_VERSION, EXPANSION_ENGINE_VERSION, DAG_ENGINE_VERSION, LEGACY_ENGINE_VERSION, SUPPORTED_ENGINE_VERSIONS, schema_version
+from . import legacy_retrieval, legacy_dag_retrieval, legacy_expansion_retrieval, legacy_answer_retrieval, legacy_window_retrieval, legacy_discourse_retrieval, legacy_general_retrieval
 from .aliases import CURRENT_ALIAS_RULES, alias_words, expand_query, inferred_alias_snapshot
 from .dag_tokenization import DAG_POLICY, DAG_RULES, DAGTokenizer, default_lexicon, lexicon_snapshot
 from .ingest import IngestConfig, RULES, SourceMap, clean_text, ingest
@@ -35,6 +35,11 @@ def build_index(data, filename, encoding, words, config=None, *, book_words=None
     if _engine_version != ENGINE_VERSION:
         if _engine_version not in SUPPORTED_ENGINE_VERSIONS:
             raise ValueError("不支持的索引引擎版本。")
+        if _engine_version == GENERAL_ENGINE_VERSION:
+            return legacy_general_retrieval.build_index(data, filename, encoding, words, config, book_words=book_words,
+                alias_groups=alias_groups, person_config=person_config, lexicon=lexicon, segmentation_config=segmentation_config,
+                expansion_resource=expansion_resource, expansion_config=expansion_config, expression_groups=expression_groups,
+                blocked_expressions=blocked_expressions, qa_snapshot=qa_snapshot, context_config=context_config, _engine_version=_engine_version)
         if _engine_version == DISCOURSE_ENGINE_VERSION:
             return legacy_discourse_retrieval.build_index(data, filename, encoding, words, config, book_words=book_words,
                 alias_groups=alias_groups, person_config=person_config, lexicon=lexicon, segmentation_config=segmentation_config,
@@ -179,6 +184,8 @@ def prepare_index_for_search(index):
 def search(index, query, config=None, *, _legacy=False, _engine_version=None):
     engine = LEGACY_ENGINE_VERSION if _legacy else _engine_version or ENGINE_VERSION
     if engine != ENGINE_VERSION:
+        if engine == GENERAL_ENGINE_VERSION:
+            return legacy_general_retrieval.search(index, query, config, _engine_version=engine)
         if engine == DISCOURSE_ENGINE_VERSION:
             return legacy_discourse_retrieval.search(index, query, config, _engine_version=engine)
         if engine == WINDOW_ENGINE_VERSION:

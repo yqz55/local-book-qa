@@ -1,0 +1,12 @@
+# 只把运行所需文件放进镜像/上传包，避免把本地数据、测试产物和 git 历史带进去。
+.data/
+.data-store/
+.git/
+.pytest_cache/
+.acl-recovery/
+.codex-*/
+__pycache__/
+*.pyc
+演示材料/
+evaluation/
+.venv/

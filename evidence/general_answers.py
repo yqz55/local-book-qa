@@ -10,15 +10,18 @@ import re
 from .general_questions import GENERAL_QUESTION_POLICY, GENERAL_QUESTION_RULES, QUESTION_PATTERNS
 
 
-GENERAL_POLICY = "source-bound-general-answers/1"
+GENERAL_POLICY = "source-bound-general-answers/2"
 GENERAL_CONFIG = {"max_reference_sentences": 3, "max_slot_chars": 120, "reference_relative_floor": 0.5,
                   "max_subject_chars": 24, "reference_order": "matched sentences and adjacent quoted context; score, source order",
-                  "short_answer_requires": "literal structure, complete source, role and state checks"}
+                  "short_answer_requires": "literal structure, complete source, role and scoped state checks",
+                  "topic_lookback_sentences": 3}
 GENERAL_RULES = {
     "QA101": "身份判断匹配原文的对象是属性结构；评价归属单列；同句前置名词话题可关联紧随的他们等指代，分别保存真实区间。",
     "QA102": "任意动词的显式问句槽位与原文分句按同一已知前后表达匹配；保留角色顺序、限定词、实际词项边界和原文状态。",
     "QA103": "对象的属性是/为/包括/有某值或明确地点表达可以填充字段；字段仅取原文，不把相邻对象的值移给问题对象。",
     "QA104": "贡献、作用、结果等可引用同一句中对象明确且含对应属性或显式结果标记的完整原句；不从结果推导原文未写出的原因。",
+    "QA105": "材料、事件地点及方向端点按显式关系填槽；短距离同段落话题继承仅允许相同名词中心语或紧邻的方向结构，并单独保存先行词证据。",
+    "QA106": "自然量词保留类别约束；多字段可用逐字段验证且来源连续的完整原句回答，不从相邻词项猜测角色或补写概括。",
     "QAG101": "不完整句、问句、否定、计划、假设、传闻、引语、未解决人物歧义和事实约束不通过通用肯定字段抽取。",
     "QAG102": "同一待答字段存在多个不同原文取值时保留歧义；候选分数和位置不能代替事实绑定证明。",
     "QA201": "所有问法均提供响应；无法验证字段时最多引用三条去重原文，明确标记参考及未解决条件，不把参考材料标为已证明答案。",
@@ -31,6 +34,11 @@ GENERAL_PATTERNS = {
     "result": r"贡献|作用|影响|结果|成就|功劳|更重要|最重要|主要|使得|从而|因此|促进|推动|带来|导致|造成|致使",
     "clause": r"[^，,；;。！？!?：:\n]+",
     "state_description": r"[，,]?(?:仍|还|一直|依然)?(?:保持|保留|呈现|具有|拥有|处于)(?:着|了)?[^，,。！？!?；;]{0,40}",
+    "material": r"(?:全部|均|都)?(?:是)?(?:用|由)(?P<value>.+?)(?P<predicate>砌成|制成|建成|做成|制造)(?:的)?",
+    "serial_title": r"《[^》]*(?:学报|期刊|杂志|刊|Journal)[^》]*》|(?:期刊|杂志|刊物)[《：:]",
+    "governing_prefix": r"^(?:据说|据报道|传闻|听说|如果|假如|假设|倘若)|(?:认为|觉得|表示|说道|说过|曾说|说)[：:]?$",
+    "governing_state_header": r"^(?:(?:原定|拟定|未来|后续|今后)?(?:计划|规划|准备|安排)(?:方案|内容|事项|情况)?(?:如下|包括|有|是)?|未来|今后|以后|将来)(?:[，,；;：:]|$)",
+    "topic_predicate": r"^(?:是|为|位于|坐落|始建|建于|全长|长|高|重|宽|包含|包括|共|非常|很|十分|格外|特别|具有|拥有|呈现|保持|保留|已经|曾经|正在|在|计划|拟|将)",
 }
 
 
@@ -52,24 +60,44 @@ def _boundary(index, sentence, local):
                    for t in index["paragraphs"][int(pid[1:]) - 1]["tokens"])
 
 
-def _safe(index, result, sentence):
+def _safe(index, result, sentence, fields=None, bindings=()):
+    from .answer_safety import blocking_query_constraints, check_fact_scope
     if not sentence["complete"]:
         return "原句不完整或引语边界未通过检查"
-    if result["question"].get("constraints") or result.get("query_ambiguities"):
+    if blocking_query_constraints(result):
         return "问题的事实约束或人物歧义未解决"
-    text = sentence["text"]
-    if re.search(GENERAL_PATTERNS["blocked"], text) or re.search(r'''[“”‘’「」『』"']''', text):
-        return "原文含否定、非事实状态、问句或引语，保留其原始表述"
-    if re.search(r"谁|什么|何人", text):
-        return "原文仍在提问，不能把问题本身当成答案"
+    if fields is None:
+        return None
     plan = result["question"].get("answer_plan", {})
-    opinion_terms = {"认为", "觉得", "感到", "感觉到", "说", "表示", "报道", "声称", "宣称"}
-    reporting = any(t["term"] in opinion_terms for pid in sentence["paragraph_ids"]
-                    for t in index["paragraphs"][int(pid[1:]) - 1]["tokens"]
-                    if sentence["clean_start"] <= t["clean_start"] < sentence["clean_end"])
-    reporting = reporting or bool(re.search(r"认为|觉得|感到|感觉到|表示|报道|声称|宣称", text))
-    if reporting and not (plan.get("intent") == "identity" and plan.get("attribution")):
-        return "原文为观点或转述，尚未核验问题要求的归属"
+    scopes, first_clause_start = [], None
+    # Validate the owning clause, not an unrelated negative elsewhere in a
+    # sentence. A description spans every clause and therefore checks them all.
+    for clause in _clauses(sentence["text"]):
+        a, b = sentence["clean_start"] + clause.start(), sentence["clean_start"] + clause.end()
+        if any(f["clean_start"] < b and a < f["clean_end"] for f in fields.values()):
+            scopes.append(clause.group())
+            if first_clause_start is None:
+                first_clause_start = clause.start()
+    prefix = sentence["text"][:first_clause_start or 0]
+    if re.search(GENERAL_PATTERNS["governing_prefix"], prefix.rstrip("，,；;：: ")):
+        return "前置转述或假设仍限定当前事实"
+    if re.search(GENERAL_PATTERNS["governing_state_header"], prefix):
+        return "前置计划、准备或未来安排仍限定当前事实"
+    # A quote beginning before the field's clause remains a quotation even
+    # when its opening punctuation is outside the clause itself.
+    if any(prefix.count(left) > prefix.count(right) for left, right in (("“", "”"), ("‘", "’"), ("「", "」"), ("『", "』"))):
+        return "当前字段仍位于前置引语范围内"
+    # Explicit date/location constraints may live in a sentence-initial adjunct.
+    # Include only adjuncts; another subject's clause cannot supply constraints.
+    adjunct = re.match(r"^(?:[0-9〇零一二三四五六七八九十年月日时分:：]+)[，,]", sentence["text"])
+    if adjunct:
+        scopes.insert(0, adjunct.group().rstrip("，,"))
+    scope = "，".join(scopes)
+    rejection = check_fact_scope(result, scope, allow_report=bool(plan.get("intent") == "identity" and plan.get("attribution")))
+    if rejection:
+        return rejection
+    if re.search(r"谁|什么|何人", scope):
+        return "原文仍在提问，不能把问题本身当成答案"
     return None
 
 
@@ -180,15 +208,115 @@ def _property(index, sentence, subject, prop, suffix, rule):
     left = re.escape(subject) + (r"(?:的)?" + re.escape(prop) if prop else "")
     connectors = r"(?:是|为|包括|有)" if rule != "QA103-location" else r"(?:位于|坐落于|设在|在)"
     rule = "QA103"
-    for clause in _clauses(sentence["text"]):
-        match = re.fullmatch(left + connectors + r"(?P<value>.+?)" + _literal(suffix), clause.group())
+    # An optional comma may separate a nominal subject from its copula, e.g.
+    # "最早发现某现象的人，是某研究者". It never licenses another subject.
+    pattern = (r"(?:^|[，,；;：:])" + left + r"[，,]?" + connectors
+               + r"(?P<value>[^，,；;。！？!?：:]+?)" + _literal(suffix) + r"(?=$|[，,；;。！？!?：:])")
+    for match in re.finditer(pattern, sentence["text"]):
         if not match:
             continue
-        a, b = clause.start() + match.start("value"), clause.start() + match.end("value")
+        a, b = match.start("value"), match.end("value")
         if b - a > GENERAL_CONFIG["max_slot_chars"] or not (_boundary(index, sentence, a) and _boundary(index, sentence, b)):
             continue
         return {"value": _span(index, sentence, a, b, rule)}, [], "fact", "general"
     return None
+
+
+def _topic_binding(index, result, sentence, subject, reference=None):
+    """Bounded explicit topic continuity, with real source spans for both ends."""
+    from .answer_safety import check_fact_scope
+    sentences = index["sentences"]["sentences"]
+    position = next((n for n, s in enumerate(sentences) if s["id"] == sentence["sentence_id"]), None)
+    if position is None:
+        return None
+    head = None
+    if reference:
+        demonstrative = re.fullmatch(r"这(?:么[^的，,]{0,5}的|座|个|条|种|些)?(?P<head>[^的，,]{1,4})", reference.group())
+        if not demonstrative or not subject.endswith(demonstrative["head"]):
+            return None
+        head = demonstrative["head"]
+    limit = GENERAL_CONFIG["topic_lookback_sentences"] if head else 1
+    for n in range(position - 1, max(-1, position - limit - 1), -1):
+        previous = sentences[n]
+        if previous["paragraph_ids"] != sentence["paragraph_ids"] or previous.get("chapter") != sentence.get("chapter"):
+            break
+        if (previous["text"].startswith(subject)
+                and re.match(GENERAL_PATTERNS["topic_predicate"], previous["text"][len(subject):])
+                and not check_fact_scope(result, previous["text"])):
+            previous = {**previous, "sentence_id": previous["id"]}
+            if not _boundary(index, previous, len(subject)):
+                return None
+            return {"kind": "bounded_paragraph_topic", "rule": "QA105",
+                    "antecedent": _span(index, previous, 0, len(subject), "QA105"),
+                    "reference": _span(index, sentence, *(reference.span() if reference else (0, min(2, len(sentence["text"])))), "QA105")}
+        # Every intervening sentence must continue the very same literal head.
+        # A new named subject, contrast or paragraph boundary stops inheritance.
+        if not head or not previous["text"].startswith(head) or re.search(r"另一|其他|另外|相比|相较", previous["text"]):
+            break
+    return None
+
+
+def _material(index, result, sentence, plan):
+    subject, predicate = plan["subject"], plan["predicate"]
+    clauses = _clauses(sentence["text"])
+    for n, clause in enumerate(clauses):
+        match = re.fullmatch(r"(?:" + re.escape(subject) + r")?" + GENERAL_PATTERNS["material"], clause.group())
+        if not match or match["predicate"] != predicate:
+            continue
+        bindings = []
+        if not clause.group().startswith(subject):
+            if n and clauses[n - 1].group() == subject:
+                bindings = [{"kind": "same_sentence_topic", "rule": "QA105",
+                             "antecedent": _span(index, sentence, *clauses[n - 1].span(), "QA105"),
+                             "reference": _span(index, sentence, *clause.span(), "QA105")}]
+            elif n and n == 1:
+                binding = _topic_binding(index, result, sentence, subject, clauses[0])
+                if not binding:
+                    continue
+                bindings = [binding]
+            else:
+                continue
+        a, b = clause.start() + match.start("value"), clause.start() + match.end("value")
+        if not (_boundary(index, sentence, a) and _boundary(index, sentence, b)):
+            continue
+        return {"value": _span(index, sentence, a, b, "QA105")}, bindings, "fact", "general"
+    return None
+
+
+def _event_location(index, sentence, plan):
+    pattern = re.escape(plan["subject"]) + re.escape(plan["predicate"]) + r"(?:在|于|到)(?P<value>.+)"
+    for clause in _clauses(sentence["text"]):
+        match = re.fullmatch(pattern, clause.group())
+        if not match:
+            continue
+        a, b = clause.start() + match.start("value"), clause.start() + match.end("value")
+        if b - a <= GENERAL_CONFIG["max_slot_chars"] and _boundary(index, sentence, a) and _boundary(index, sentence, b):
+            return {"value": _span(index, sentence, a, b, "QA105")}, [], "fact", "general"
+    return None
+
+
+def _endpoints(index, result, sentence, plan):
+    first, second = plan["first"], plan["second"]
+    # Both direction roles must be explicitly present in the source, in order.
+    if first == second:
+        return None
+    subject = plan["subject"]
+    prefix = re.escape(subject) + r"[，,]?" if sentence["text"].startswith(subject) else ""
+    match = re.fullmatch(prefix + re.escape(first) + r"起(?P<first>[^，,。；;]+)[，,].*?(?:至|到)"
+                         + re.escape(second) + r"端(?:的)?(?P<second>[^，,。；;]+)[。]?", sentence["text"])
+    if not match:
+        return None
+    bindings = []
+    if not prefix:
+        binding = _topic_binding(index, result, sentence, subject)
+        if not binding:
+            return None
+        bindings = [binding]
+    fields = {name: _span(index, sentence, *match.span(name), "QA106") for name in ("first", "second")}
+    if any(not _boundary(index, sentence, n) for name in ("first", "second") for n in match.span(name)):
+        return None
+    fields["description"] = _span(index, sentence, 0, len(sentence["text"]), "QA106")
+    return fields, bindings, "fact", "excerpt"
 
 
 def _surface(index, result, sentence, plan):
@@ -223,6 +351,15 @@ def _surface(index, result, sentence, plan):
             if slot["text"] == "谁" and (len(value) > GENERAL_CONFIG["max_subject_chars"]
                     or re.search(r"昨天|今天|明天|随后|后来|已经|正在|帮助|要求|建议|通知|让|被", value)):
                 break
+            if re.search(r"期刊|杂志|刊物", slot["text"]) and not re.search(GENERAL_PATTERNS["serial_title"], value, re.I):
+                break
+            # An explicit plural classifier requires an actual enumeration;
+            # the numeral is a constraint on the returned items, not decoration.
+            count = re.match(r"哪([两二三四五六七八九十])(?:种|类|本|条|座|处|项)", slot["text"])
+            if count:
+                expected = "零一二三四五六七八九十".find(count[1].replace("两", "二"))
+                if len(re.split(r"、|以及|和|及", value)) != expected:
+                    break
             fields[f"slot_{number + 1}"] = _span(index, sentence, a, b, "QA102")
         else:
             if len(slots) == 1:
@@ -276,6 +413,12 @@ def answer_general(index, result, evidence, base):
                     found = ({"description": _span(index, sentence, 0, len(sentence["text"]), "QA102")}, [], "fact", "excerpt")
             elif plan["intent"] == "attribute":
                 found = _property(index, sentence, plan["subject"], plan["property"], "", "QA103")
+            elif plan["intent"] == "material":
+                found = _material(index, result, sentence, plan)
+            elif plan["intent"] == "event_location":
+                found = _event_location(index, sentence, plan)
+            elif plan["intent"] == "endpoints":
+                found = _endpoints(index, result, sentence, plan)
             elif plan["intent"] == "location":
                 found = _property(index, sentence, plan["subject"], "", plan["suffix"], "QA103-location")
             elif plan["intent"] == "consequence":
@@ -286,6 +429,13 @@ def answer_general(index, result, evidence, base):
                 found = _surface(index, result, sentence, plan)
             if found:
                 fields, bindings, statement, template = found
+                rejection = _safe(index, result, sentence, fields, bindings)
+                if rejection:
+                    fields = {}
+            else:
+                # Keep a scoped refusal in the diagnostic trail even when the
+                # sentence could not fill the structural slot.
+                rejection = _safe(index, result, sentence, {"description": _span(index, sentence, 0, len(sentence["text"]), "QAG101")})
         decision = {"accepted": bool(fields), "sentence_id": sentence["sentence_id"],
                     "fields": fields, "reason": "原文结构、待答字段和角色检查通过" if fields else
                     ("QAG101：" + rejection if rejection else "未找到与问题字段绑定的通用结构"),
@@ -295,7 +445,7 @@ def answer_general(index, result, evidence, base):
         if fields:
             accepted.append(decision)
     if not accepted:
-        return None
+        return reference_response(index, result, evidence, {**base, "decisions": base["decisions"] + decisions})
     signatures = {(d["answer_template"], d["statement_kind"],
                    d["fields"]["value" if d["answer_template"] == "general" else "description"]["text"])
                   for d in accepted}
@@ -320,7 +470,8 @@ def answer_general(index, result, evidence, base):
             "statement_kind": selected["statement_kind"], "fields": selected["fields"],
             "bindings": selected["bindings"], "template_id": template["id"], "template": template,
             "text": template["text"].format(**{key: value["text"] for key, value in selected["fields"].items()}),
-            "evidence_ids": [selected["sentence_id"]], "decisions": base["decisions"] + decisions,
+            "evidence_ids": list(dict.fromkeys([selected["sentence_id"], *(b["antecedent"]["sentence_id"] for b in selected["bindings"] if b.get("antecedent"))])),
+            "decisions": base["decisions"] + decisions,
             "reason": "通用结构与待答字段匹配，每个答案字段均可定位至原文。",
             "rule_ids": [selected["rule"], "G104"]}
 

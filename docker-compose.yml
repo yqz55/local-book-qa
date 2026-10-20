@@ -1,0 +1,27 @@
+# 可选：在已安装 Docker CLI 的机器上用 compose 构建并运行（宿主端口 10203）。
+# 飞牛 NAS 上用 “Docker → Compose → 创建项目” 导入本文件即可（先上传代码到 build 目录）。
+services:
+  nlp:
+    build: .
+    image: chinese-evidence-retrieval:local
+    container_name: nlp-qa
+    restart: unless-stopped
+    ports:
+      - "10203:8501"
+    environment:
+      NLP_DATA_DIR: /data
+      STATUS_DIR: /status
+      # 以这个 UID/GID 运行，方便通过共享目录直接管理数据文件
+      PUID: "1000"
+      PGID: "1000"
+      HOME: /tmp
+    volumes:
+      # 宿主数据目录：对话、索引、复算记录都保存在这里
+      - /vol2/1000/nlp/data:/data
+      - /vol2/1000/nlp/status:/status
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8501/_stcore/health', timeout=4).read().strip()==b'ok' else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s

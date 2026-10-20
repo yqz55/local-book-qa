@@ -7,7 +7,7 @@ import json
 import math
 from pathlib import Path
 
-from . import ALIAS_ENGINE_VERSION, ENGINE_VERSION, DISCOURSE_ENGINE_VERSION, WINDOW_ENGINE_VERSION, ANSWER_ENGINE_VERSION, EXPANSION_ENGINE_VERSION, DAG_ENGINE_VERSION, PERSON_ENGINE_VERSION, FREQUENCY_ENGINE_VERSION, LEGACY_ENGINE_VERSION, SUPPORTED_ENGINE_VERSIONS, schema_version
+from . import ALIAS_ENGINE_VERSION, ENGINE_VERSION, GENERAL_ENGINE_VERSION, DISCOURSE_ENGINE_VERSION, WINDOW_ENGINE_VERSION, ANSWER_ENGINE_VERSION, EXPANSION_ENGINE_VERSION, DAG_ENGINE_VERSION, PERSON_ENGINE_VERSION, FREQUENCY_ENGINE_VERSION, LEGACY_ENGINE_VERSION, SUPPORTED_ENGINE_VERSIONS, schema_version
 from .aliases import CURRENT_QUERY_POLICY, LEGACY_ALIAS_QUERY_POLICY
 from .dag_tokenization import DAG_POLICY
 from .ingest import IngestConfig
@@ -22,8 +22,13 @@ def make_trace(index: dict, result: dict) -> dict:
             if "question" in result:
                 if "window_retrieval" in result:
                     if "general_answer_policy" in result:
-                        engine = ENGINE_VERSION
-                        index = prepare_index_for_search(index)
+                        if result["general_answer_policy"]["policy"] == "source-bound-general-answers/1":
+                            engine = GENERAL_ENGINE_VERSION
+                            from .legacy_general_retrieval import prepare_index_for_search as prepare_general_index
+                            index = prepare_general_index(index)
+                        else:
+                            engine = ENGINE_VERSION
+                            index = prepare_index_for_search(index)
                     elif "discourse_policy" in result:
                         engine = DISCOURSE_ENGINE_VERSION
                         from .legacy_discourse_retrieval import prepare_index_for_search as prepare_discourse_index
@@ -118,7 +123,7 @@ def compare(expected, actual, path: str = "$", tolerance: float = 1e-12):
 
 
 def rebuild_index(index: dict) -> dict:
-    if not isinstance(index, dict) or index.get("schema") not in {f"evidence-index/{v}" for v in range(1, 11)}:
+    if not isinstance(index, dict) or index.get("schema") not in {f"evidence-index/{v}" for v in range(1, 12)}:
         raise ValueError("不支持的索引格式。")
     engine = index["identity"]["engine_version"]
     if engine not in SUPPORTED_ENGINE_VERSIONS:
@@ -129,8 +134,8 @@ def rebuild_index(index: dict) -> dict:
     source = index["source"]
     data = base64.b64decode(source["bytes_base64"], validate=True)
     dictionary = index["dictionary"]
-    person_engines = {ENGINE_VERSION, DISCOURSE_ENGINE_VERSION, WINDOW_ENGINE_VERSION, ANSWER_ENGINE_VERSION, EXPANSION_ENGINE_VERSION, DAG_ENGINE_VERSION, PERSON_ENGINE_VERSION}
-    dag_engines = {ENGINE_VERSION, DISCOURSE_ENGINE_VERSION, WINDOW_ENGINE_VERSION, ANSWER_ENGINE_VERSION, EXPANSION_ENGINE_VERSION, DAG_ENGINE_VERSION}
+    person_engines = {ENGINE_VERSION, GENERAL_ENGINE_VERSION, DISCOURSE_ENGINE_VERSION, WINDOW_ENGINE_VERSION, ANSWER_ENGINE_VERSION, EXPANSION_ENGINE_VERSION, DAG_ENGINE_VERSION, PERSON_ENGINE_VERSION}
+    dag_engines = {ENGINE_VERSION, GENERAL_ENGINE_VERSION, DISCOURSE_ENGINE_VERSION, WINDOW_ENGINE_VERSION, ANSWER_ENGINE_VERSION, EXPANSION_ENGINE_VERSION, DAG_ENGINE_VERSION}
     expansion = index.get("query_expansion", {})
     rebuilt = build_index(data, source["filename"], source["encoding"],
                           dictionary["words"] if legacy else dictionary["base_words"],
@@ -150,7 +155,7 @@ def rebuild_index(index: dict) -> dict:
 
 
 def replay(trace: dict) -> dict:
-    if not isinstance(trace, dict) or trace.get("schema") not in {f"evidence-trace/{v}" for v in range(1, 11)}:
+    if not isinstance(trace, dict) or trace.get("schema") not in {f"evidence-trace/{v}" for v in range(1, 12)}:
         raise ValueError("不支持的复算记录格式。")
     if trace.get("engine_version") not in SUPPORTED_ENGINE_VERSIONS:
         raise ValueError("不支持该记录的引擎版本。")
@@ -175,15 +180,15 @@ def replay(trace: dict) -> dict:
             "query_policy": "base-longest/legacy-1.0" if legacy else recalculated["query_tokenization"]["policy"],
             "checks": ["原始字节与文本版本", "清洗与原文位置映射", "切分与分词轨迹",
                        "旧版查询分词规则" if legacy else "书内词频与查询选择过程",
-                       *(["姓名发现规则、候选判断、原文证据与歧义", "整词保护、关系来源与去重扩展"] if trace["engine_version"] in {ENGINE_VERSION, DISCOURSE_ENGINE_VERSION, WINDOW_ENGINE_VERSION, ANSWER_ENGINE_VERSION, EXPANSION_ENGINE_VERSION, DAG_ENGINE_VERSION, PERSON_ENGINE_VERSION} else []),
-                       *(["通用词典快照、初分词频、DAG 候选及实际最优路径"] if trace["engine_version"] in {ENGINE_VERSION, DISCOURSE_ENGINE_VERSION, WINDOW_ENGINE_VERSION, ANSWER_ENGINE_VERSION, EXPANSION_ENGINE_VERSION, DAG_ENGINE_VERSION} else []),
-                       *(["中文 WordNet 快照、通用与本书校正", "完整词项短语区间、候选筛选、权重及同组最大贡献"] if trace["engine_version"] in {ENGINE_VERSION, DISCOURSE_ENGINE_VERSION, WINDOW_ENGINE_VERSION, ANSWER_ENGINE_VERSION, EXPANSION_ENGINE_VERSION} else []),
-                       *(["问题提炼、疑问表达过滤与事实约束", "句子边界、原文区间、全部句子候选与贡献", "抽取规则、字段来源、冲突/拒答与模板答案"] if trace["engine_version"] in {ENGINE_VERSION, DISCOURSE_ENGINE_VERSION, WINDOW_ENGINE_VERSION, ANSWER_ENGINE_VERSION} else []),
-                       *(["相邻句窗口、独立TF/DF、BM25贡献及排名", "证据组去重、上下文用途、两句对象绑定与字段出处"] if trace["engine_version"] in {ENGINE_VERSION, DISCOURSE_ENGINE_VERSION, WINDOW_ENGINE_VERSION} else []),
-                       *(["原文明示因果方向、方法角色与逐项拒答", "原因/方法字段、事实与操作说明状态及模板"] if trace["engine_version"] in {ENGINE_VERSION, DISCOURSE_ENGINE_VERSION} else []),
-                       *(["通用待答字段、身份/属性/事件角色和观点归属", "通用字段区间、原句答案与参考回答的实际内容"] if trace["engine_version"] == ENGINE_VERSION else []),
+                       *(["姓名发现规则、候选判断、原文证据与歧义", "整词保护、关系来源与去重扩展"] if trace["engine_version"] in {ENGINE_VERSION, GENERAL_ENGINE_VERSION, DISCOURSE_ENGINE_VERSION, WINDOW_ENGINE_VERSION, ANSWER_ENGINE_VERSION, EXPANSION_ENGINE_VERSION, DAG_ENGINE_VERSION, PERSON_ENGINE_VERSION} else []),
+                       *(["通用词典快照、初分词频、DAG 候选及实际最优路径"] if trace["engine_version"] in {ENGINE_VERSION, GENERAL_ENGINE_VERSION, DISCOURSE_ENGINE_VERSION, WINDOW_ENGINE_VERSION, ANSWER_ENGINE_VERSION, EXPANSION_ENGINE_VERSION, DAG_ENGINE_VERSION} else []),
+                       *(["中文 WordNet 快照、通用与本书校正", "完整词项短语区间、候选筛选、权重及同组最大贡献"] if trace["engine_version"] in {ENGINE_VERSION, GENERAL_ENGINE_VERSION, DISCOURSE_ENGINE_VERSION, WINDOW_ENGINE_VERSION, ANSWER_ENGINE_VERSION, EXPANSION_ENGINE_VERSION} else []),
+                       *(["问题提炼、疑问表达过滤与事实约束", "句子边界、原文区间、全部句子候选与贡献", "抽取规则、字段来源、冲突/拒答与模板答案"] if trace["engine_version"] in {ENGINE_VERSION, GENERAL_ENGINE_VERSION, DISCOURSE_ENGINE_VERSION, WINDOW_ENGINE_VERSION, ANSWER_ENGINE_VERSION} else []),
+                       *(["相邻句窗口、独立TF/DF、BM25贡献及排名", "证据组去重、上下文用途、两句对象绑定与字段出处"] if trace["engine_version"] in {ENGINE_VERSION, GENERAL_ENGINE_VERSION, DISCOURSE_ENGINE_VERSION, WINDOW_ENGINE_VERSION} else []),
+                       *(["原文明示因果方向、方法角色与逐项拒答", "原因/方法字段、事实与操作说明状态及模板"] if trace["engine_version"] in {ENGINE_VERSION, GENERAL_ENGINE_VERSION, DISCOURSE_ENGINE_VERSION} else []),
+                       *(["通用待答字段、身份/属性/事件角色和观点归属", "通用字段区间、原句答案与参考回答的实际内容"] if trace["engine_version"] in {ENGINE_VERSION, GENERAL_ENGINE_VERSION} else []),
                        "词频、文档频率与段长", "全部候选及词项分数", "最终排名与并列规则"]}
-    if trace["engine_version"] in {ENGINE_VERSION, DISCOURSE_ENGINE_VERSION, WINDOW_ENGINE_VERSION}:
+    if trace["engine_version"] in {ENGINE_VERSION, GENERAL_ENGINE_VERSION, DISCOURSE_ENGINE_VERSION, WINDOW_ENGINE_VERSION}:
         report.update(window_candidate_count=recalculated["window_retrieval"]["candidate_count"],
                       window_top_ids=recalculated["window_retrieval"]["top_ids"],
                       evidence_group_ids=recalculated["answer"]["evidence_group_ids"],

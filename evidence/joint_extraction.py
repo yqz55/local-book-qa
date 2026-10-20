@@ -7,8 +7,10 @@ is used: antecedent, reference and answer each retain their real source range.
 
 import re
 
+from .quantities import UNITS, compatible_unit, quantity_matches
 
-JOINT_POLICY = "adjacent-explicit-anaphora/1"
+
+JOINT_POLICY = "adjacent-explicit-anaphora/2"
 JOINT_RULES = {
     "J101": "连续两句中，前句以问题中明确命名的唯一项目/试点/活动/实验/工程为主语，后句以同类型的该X开头；唯一日期与所问事件在后句的显式句式中绑定。",
     "J102": "同一受限两句指代规则中，后句的明确属性与问题属性一致，抽取唯一原文数量并核对指定单位。",
@@ -22,7 +24,7 @@ _SUBJECT = re.compile(r"(?P<name>[A-Za-z0-9\u3400-\u9fff]{1,48}?(?P<type>" + _TY
 _REFERENCE = re.compile(r"(?P<reference>该(?P<type>" + _TYPES + r"))")
 _EVENTS = ("启动", "开始", "结束", "发布", "举办", "召开", "成立", "建成", "竣工", "投用", "完成", "开工", "上线", "实施", "开展", "发射")
 _PROPERTIES = ("覆盖面积", "参与人数", "参加人数", "总投资额", "总投资", "投资额", "总长度", "持续时间", "预算", "容量", "面积", "投资", "数量", "人数", "长度", "重量", "费用", "成本", "经费", "金额")
-_UNITS = ("平方千米", "平方公里", "平方米", "立方米", "千米/秒", "千米", "公里", "厘米", "毫米", "公斤", "千克", "毫克", "毫升", "小时", "分钟", "个人", "余人", "万人", "万元", "亿元", "摄氏度", "克", "米", "人", "个", "本", "份", "件", "台", "次", "天", "秒", "元", "升", "%", "％", "℃")
+_UNITS = tuple(sorted(set(UNITS) | {scale + unit for scale in ("万亿", "亿", "万", "千") for unit in UNITS}, key=lambda u: (-len(u), u)))
 _INTRO = re.compile(r"(?:(?:目前|现已|已经|正式|成功))?(?:进入|启动(?!仪式|日期|时间|地点|工作|情况|负责人)|开始(?!日期|时间)|完成(?!日期|时间)|建成|成立|位于|设在|覆盖|包括|涉及|采用|是|为|实施|开展|开工|上线|投用|举办(?!日期|时间|地点)|召开(?!日期|时间|地点))")
 _MEDIATION = re.compile(r"帮助|介绍|要求|建议|安排|通知|祝贺|负责|协助|让|被|把|向|对于|关于|新闻|报道|消息|讨论|提到|强调")
 _COORDINATION = re.compile(r"和|与|及|、|以及|同时|分别|另一|其他|其它")
@@ -156,7 +158,8 @@ def extract_joint(index, result, evidence):
             decision["rule"] = code
             decision["reason"] = code + "：" + reason
 
-        if result["question"].get("constraints") or result.get("query_ambiguities"):
+        from .answer_safety import blocking_query_constraints, check_fact_scope
+        if blocking_query_constraints(result):
             reject("JG102", "问题含尚未支持的事实约束或人物歧义")
             continue
         if boundary_reasons or not same_type or not unique or not lexical_boundaries:
@@ -172,8 +175,10 @@ def extract_joint(index, result, evidence):
         for sentence in (left, right):
             if not sentence.get("complete"):
                 unsafe.append("incomplete_sentence")
-            if re.search(patterns["unsafe"], sentence["text"]):
-                unsafe.append("nonfactual_or_negative")
+            scope_result = result if sentence is right else {"question": {"constraints": []}}
+            failure = check_fact_scope(scope_result, sentence["text"])
+            if failure:
+                unsafe.append(failure)
             if re.search(patterns["quote"], sentence["text"]):
                 unsafe.append("quotation")
             if _MEDIATION.search(sentence["text"]):
@@ -186,7 +191,7 @@ def extract_joint(index, result, evidence):
             reject("JG102", "前句未命中命名对象作为显式主语的受支持句式")
             continue
         pattern = patterns["date" if kind == "time" else "quantity"]
-        numeric = list(re.finditer(pattern, body))
+        numeric = list(quantity_matches(pattern, body) if kind == "quantity" else re.finditer(pattern, body))
         if len(numeric) > 1:
             reject("JG103", "后句有多个日期或数值，无法唯一绑定")
             continue
@@ -204,7 +209,7 @@ def extract_joint(index, result, evidence):
             from .extraction import _requested_unit
             requested = query_unit or _requested_unit(result)
             checks["requested_unit"] = requested
-            if requested and not re.search(r"[0-9零〇一二三四五六七八九十百千万亿两]\s*" + re.escape(requested) + r"(?:以上|以下|左右|以内|以外)?$", form["answer"]):
+            if not compatible_unit(form["answer"], requested):
                 reject("JG102", "原文数量单位与问题指定单位不一致")
                 continue
             if any(m.start() < form.end("answer") and form.start("answer") < m.end()

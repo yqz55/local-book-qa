@@ -28,6 +28,7 @@ html, body, [data-testid="stApp"] { font-family: "Segoe UI", "Microsoft YaHei", 
 .document-title { font-size:20px !important; font-weight:650 !important; padding:0 !important; margin:0 !important; line-height:1.5 !important; overflow-wrap:anywhere; }
 .document-subtitle { font-size:12px; color:var(--muted); margin:4px 0 0; }
 .header-rule { height:1px; background:var(--line); margin:0 -2.5rem 10px; }
+.original-text { color:var(--ink); font-size:15px; line-height:1.9; white-space:pre-wrap; overflow-wrap:anywhere; tab-size:4; }
 [data-testid="stPopover"] button { border:none; background:transparent; border-radius:8px; padding:6px; }
 [data-testid="stPopoverButton"] > div:last-child { display:none; }
 .st-key-chat_history { max-width:790px; margin:0 auto; padding-top:4px; }
@@ -97,6 +98,9 @@ mark { background:#e7ecef; color:#20232b; padding:1px 0; border-radius:2px; }
  .header-rule { margin-left:-1rem; margin-right:-1rem; }
  .document-title { font-size:17px !important; }
  .document-subtitle { font-size:11px; }
+ [data-testid="stHorizontalBlock"]:has(.document-title) { flex-wrap:nowrap; gap:.5rem; }
+ [data-testid="stHorizontalBlock"]:has(.document-title) > [data-testid="stColumn"]:first-child { min-width:0; flex:1 1 0; }
+ [data-testid="stHorizontalBlock"]:has(.document-title) > [data-testid="stColumn"]:last-child { min-width:32px; flex:0 0 32px; }
  [data-testid="stBottomBlockContainer"] { padding:10px 16px 12px; }
  [data-testid="stBottomBlockContainer"]:after { font-size:10px; }
  [data-testid="stChatInput"] { min-height:92px; border-radius:20px; }

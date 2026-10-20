@@ -13,6 +13,7 @@ from evidence.retrieval import BM25Config, build_index, prepare_index_for_search
 from evidence.storage import Store
 from evidence.tracing import make_trace, read_record, rebuild_index, serialize
 from ui.chat import process_snapshot, show_ready, show_turn
+from ui.source import show_original
 from ui.styles import CSS
 
 
@@ -267,6 +268,7 @@ if conversation:
                       args=(conversation["id"],), disabled=not conversation["turns"])
             st.button("删除对话", icon=":material/delete:", width="stretch", on_click=remove_chat, args=(conversation["id"],))
     st.markdown('<div class="header-rule"></div>', unsafe_allow_html=True)
+    show_original(st.session_state.index)
     with st.container(key="chat_history"):
         show_ready(st.session_state.index)
         for turn in conversation["turns"]:
