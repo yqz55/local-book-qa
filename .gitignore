@@ -1,5 +1,51 @@
 .venv/
+venv/
+env/
 __pycache__/
+*.py[cod]
 .pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
 .data/
+/.data-store/
+/status/
 *.egg-info/
+/build/
+/dist/
+
+# Local settings, credentials, editor files and logs
+.env
+.env.*
+!.env.example
+/.streamlit/secrets.toml
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+*.log
+*.tmp
+*.bak
+*.swp
+*~
+
+# Local recovery backups and temporary Codex artifacts
+/.acl-recovery/
+/.codex-*/
+
+# Presentation materials
+/演示材料/
+/PPT*.md
+
+# Planning, documentation, tests and evaluation (not needed to run the app)
+/PLAN.md
+/docs/
+/tests/
+/evaluation/
+/data/articles/
+/data/discourse_articles/
+/evidence/evaluate.py
+/evidence/evaluate_discourse.py
